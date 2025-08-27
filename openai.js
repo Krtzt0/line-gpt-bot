@@ -5,7 +5,8 @@ const OPENAI_API_KEYS = [
   process.env.OPENAI_API_KEY_1,
   process.env.OPENAI_API_KEY_2,
   process.env.OPENAI_API_KEY_3,
-  process.env.OPENAI_API_KEY_4
+  process.env.OPENAI_API_KEY_4,
+  process.env.OPENAI_API_KEY_5
 ];
 
 const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-4o';
