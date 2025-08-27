@@ -24,9 +24,8 @@ function verifyLineSignature(req) {
 
 app.post('/webhook', async (req, res) => {
   try {
-    if (!verifyLineSignature(req)) {
-      return res.status(401).send('Invalid signature');
-    }
+    if (!verifyLineSignature(req)) return res.status(401).send('Invalid signature');
+
     const events = req.body.events || [];
     for (const ev of events) {
       if (ev.type !== 'message' || ev.message.type !== 'text') continue;
@@ -35,11 +34,19 @@ app.post('/webhook', async (req, res) => {
       const userMessage = ev.message.text.trim();
       const replyToken = ev.replyToken;
 
-      // 1) คำนวณ embedding และค้นหา memory ที่เกี่ยวข้อง
+      // 1) Embedding + memory
       const queryEmbedding = await getEmbedding(userMessage);
-      const memResults = await queryMemories(queryEmbedding, 5, userId);
+      let memResults = [];
+      if (queryEmbedding) {
+        try {
+          memResults = await queryMemories(queryEmbedding, 5, userId);
+        } catch (err) {
+          console.error('queryMemories error', err);
+          memResults = [];
+        }
+      }
 
-      // 2) ตรวจสอบว่าต้อง search เว็บหรือไม่
+      // 2) Web search heuristic
       let searchSnippets = [];
       const needsSearch = /ข่าว|ล่าสุด|ราคา|สถิติ|อัพเดต|อัปเดต|วันนี้|เมื่อวาน|ล่าสุดของ/i.test(userMessage);
       if (needsSearch) {
@@ -47,10 +54,10 @@ app.post('/webhook', async (req, res) => {
         searchSnippets = searchRes.slice(0, 5).map(s => `- ${s.title}\n${s.snippet}\n(${s.link})`);
       }
 
-      // 3) สร้าง system prompt สไตล์น่ารัก ขี้เล่น
+      // 3) System prompt น่ารัก ขี้เล่น
       const persona = `
-คุณคือตัวละครชื่อ "Mochi" เป็นบอทน่ารัก ขี้เล่น พูดไทยแบบกันเอง
-ชอบใส่อีโมจิ 😆🥰 แต่ยังสุภาพ ตอบคำถามกระชับ เข้าใจง่าย
+คุณคือตัวละครชื่อ "Mochi" บอทน่ารัก ขี้เล่น พูดไทยแบบกันเอง
+ชอบใส่อีโมจิ 😆🥰 ตอบคำถามกระชับ เข้าใจง่าย
 บางครั้งใส่มุกสั้น ๆ หรือคำพูดน่ารัก ๆ เพื่อให้ผู้ใช้ยิ้ม
 `;
 
@@ -76,9 +83,9 @@ ${searchText}
       const openaiResp = await fetchChatResponse(systemPrompt, userMessage);
 
       // 5) ตอบกลับ LINE
-      await replyToLine(replyToken, openaiResp);
+      await replyToLine(replyToken, openaiResp, LINE_CHANNEL_ACCESS_TOKEN);
 
-      // 6) บันทึก memory (คำถาม + embedding)
+      // 6) บันทึก memory
       if (queryEmbedding) {
         await storeMemory(userId, userMessage, queryEmbedding, { source: 'user-msg' });
       }

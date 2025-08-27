@@ -1,6 +1,6 @@
 const fetch = require('cross-fetch');
 
-// กำหนด API Keys หลายตัว และตัดค่าที่ undefined
+// โหลด API Keys และตัดค่า undefined
 const OPENAI_API_KEYS = [
   process.env.OPENAI_API_KEY_1,
   process.env.OPENAI_API_KEY_2,
@@ -16,17 +16,15 @@ if (OPENAI_API_KEYS.length === 0) {
 const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-4o';
 const EMB_MODEL = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large';
 
-let lastKeyIndex = -1; // ใช้เก็บ index ของ key ล่าสุดที่ใช้
+let lastKeyIndex = -1;
 
 async function fetchWithKeys(url, payload) {
-  if (OPENAI_API_KEYS.length === 0) {
-    throw new Error("No valid OpenAI API keys available");
-  }
+  if (OPENAI_API_KEYS.length === 0) throw new Error("No valid OpenAI API keys available");
 
-  // ลองทุก key แบบวงกลม
   for (let i = 0; i < OPENAI_API_KEYS.length; i++) {
     lastKeyIndex = (lastKeyIndex + 1) % OPENAI_API_KEYS.length;
     const key = OPENAI_API_KEYS[lastKeyIndex];
+    console.log(`Trying OpenAI key index ${lastKeyIndex}...`);
 
     try {
       const res = await fetch(url, {
@@ -44,10 +42,10 @@ async function fetchWithKeys(url, payload) {
         return data;
       } else if (data.error && data.error.code === 'insufficient_quota') {
         console.warn(`Key quota exceeded for key index ${lastKeyIndex}, trying next key...`);
-        continue; // ใช้ key ถัดไป
+        continue;
       } else {
         console.error('OpenAI API error', data);
-        return data; // error อื่น ๆ
+        return data;
       }
 
     } catch (err) {
@@ -89,9 +87,7 @@ async function getEmbedding(text) {
 
   try {
     const data = await fetchWithKeys('https://api.openai.com/v1/embeddings', payload);
-    if (!data || !data.data || !data.data[0]) {
-      return null;
-    }
+    if (!data || !data.data || !data.data[0]) return null;
     return data.data[0].embedding;
   } catch (err) {
     console.error('getEmbedding error', err);
