@@ -1,19 +1,33 @@
 const fetch = require('cross-fetch');
 
-// กำหนด API Keys หลายตัว
+// กำหนด API Keys หลายตัว และตัดค่าที่ undefined
 const OPENAI_API_KEYS = [
   process.env.OPENAI_API_KEY_1,
   process.env.OPENAI_API_KEY_2,
   process.env.OPENAI_API_KEY_3,
   process.env.OPENAI_API_KEY_4,
   process.env.OPENAI_API_KEY_5
-];
+].filter(Boolean);
+
+if (OPENAI_API_KEYS.length === 0) {
+  console.error("No OpenAI API keys found! Please set environment variables.");
+}
 
 const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-4o';
 const EMB_MODEL = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large';
 
+let lastKeyIndex = -1; // ใช้เก็บ index ของ key ล่าสุดที่ใช้
+
 async function fetchWithKeys(url, payload) {
-  for (let key of OPENAI_API_KEYS) {
+  if (OPENAI_API_KEYS.length === 0) {
+    throw new Error("No valid OpenAI API keys available");
+  }
+
+  // ลองทุก key แบบวงกลม
+  for (let i = 0; i < OPENAI_API_KEYS.length; i++) {
+    lastKeyIndex = (lastKeyIndex + 1) % OPENAI_API_KEYS.length;
+    const key = OPENAI_API_KEYS[lastKeyIndex];
+
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -26,11 +40,10 @@ async function fetchWithKeys(url, payload) {
 
       const data = await res.json();
 
-      // ตรวจสอบ error ว่าเป็นเรื่องโควต้าหมดหรือไม่
       if (res.ok) {
         return data;
       } else if (data.error && data.error.code === 'insufficient_quota') {
-        console.warn(`Key quota exceeded, trying next key...`);
+        console.warn(`Key quota exceeded for key index ${lastKeyIndex}, trying next key...`);
         continue; // ใช้ key ถัดไป
       } else {
         console.error('OpenAI API error', data);
@@ -38,9 +51,10 @@ async function fetchWithKeys(url, payload) {
       }
 
     } catch (err) {
-      console.error('Fetch error', err);
+      console.error(`Fetch error with key index ${lastKeyIndex}`, err);
     }
   }
+
   throw new Error('All OpenAI API keys exhausted');
 }
 
@@ -62,7 +76,7 @@ async function fetchChatResponse(systemPrompt, userMessage) {
     }
     return data.choices[0].message.content.trim();
   } catch (err) {
-    console.error(err);
+    console.error('fetchChatResponse error', err);
     return 'ขอโทษนะ เกิดปัญหาในการประมวลผล ลองพิมพ์อีกครั้งได้ไหม';
   }
 }
@@ -80,7 +94,7 @@ async function getEmbedding(text) {
     }
     return data.data[0].embedding;
   } catch (err) {
-    console.error(err);
+    console.error('getEmbedding error', err);
     return null;
   }
 }
